@@ -44,7 +44,7 @@ A B2B supply chain network app using network analytics, open-source APIs, and Do
 
 2. Start all services:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Access the services:
@@ -56,12 +56,12 @@ A B2B supply chain network app using network analytics, open-source APIs, and Do
 ### Stopping the Application
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 To remove all data:
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 ## API Endpoints
@@ -101,18 +101,22 @@ curl -X POST "http://localhost:8000/network/analyze" \
 ### Find Shortest Path
 
 ```bash
-curl -X POST "http://localhost:8000/network/shortest-path?source=SUP1&target=DIS1" \
+curl -X POST "http://localhost:8000/network/shortest-path" \
   -H "Content-Type: application/json" \
   -d '{
-    "nodes": [
-      {"id": "SUP1", "type": "Supplier", "name": "Raw Materials Inc"},
-      {"id": "MAN1", "type": "Manufacturer", "name": "Assembly Corp"},
-      {"id": "DIS1", "type": "Distributor", "name": "Logistics Ltd"}
-    ],
-    "edges": [
-      {"source": "SUP1", "target": "MAN1", "relationship": "SUPPLIES", "weight": 1.0},
-      {"source": "MAN1", "target": "DIS1", "relationship": "SHIPS_TO", "weight": 1.5}
-    ]
+    "network_data": {
+      "nodes": [
+        {"id": "SUP1", "type": "Supplier", "name": "Raw Materials Inc"},
+        {"id": "MAN1", "type": "Manufacturer", "name": "Assembly Corp"},
+        {"id": "DIS1", "type": "Distributor", "name": "Logistics Ltd"}
+      ],
+      "edges": [
+        {"source": "SUP1", "target": "MAN1", "relationship": "SUPPLIES", "weight": 1.0},
+        {"source": "MAN1", "target": "DIS1", "relationship": "SHIPS_TO", "weight": 1.5}
+      ]
+    },
+    "source": "SUP1",
+    "target": "DIS1"
   }'
 ```
 
@@ -139,14 +143,22 @@ The frontend is currently a placeholder. To add a React app:
 1. Navigate to the frontend folder
 2. Generate a React app using create-react-app or GitHub Spark
 3. Update the Dockerfile to use the multi-stage build (commented in the file)
-4. Rebuild: `docker-compose up -d --build frontend`
+4. Rebuild: `docker compose up -d --build frontend`
 
 ## Environment Variables
 
-Backend environment variables (set in docker-compose.yml):
+Backend environment variables (set in docker-compose.yml or .env file):
 - `NEO4J_URI`: Neo4j connection URI (default: bolt://neo4j:7687)
 - `NEO4J_USER`: Neo4j username (default: neo4j)
 - `NEO4J_PASSWORD`: Neo4j password (default: password)
+
+**Security Note**: Create a `.env` file based on `.env.example` and update the default credentials before deploying to production.
+
+## Security Considerations
+
+1. **CORS Configuration**: The backend allows all origins by default. In production, update `allow_origins` in `backend/app/main.py` to restrict access to specific domains.
+2. **Neo4j Credentials**: Change the default Neo4j credentials in your `.env` file.
+3. **Dependencies**: All dependencies are checked for known vulnerabilities. Keep them updated regularly.
 
 ## Technologies
 

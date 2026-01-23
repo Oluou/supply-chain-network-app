@@ -2,48 +2,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from contextlib import asynccontextmanager
 import networkx as nx
 from neo4j import GraphDatabase
 import os
 
-app = FastAPI(
-    title="Supply Chain Network API",
-    description="API for supply chain network analytics using NetworkX and Neo4j",
-    version="1.0.0"
-)
-
-# CORS middleware for frontend access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Neo4j connection settings
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
-
-
-class Node(BaseModel):
-    id: str
-    type: str
-    name: str
-    properties: Optional[Dict] = {}
-
-
-class Edge(BaseModel):
-    source: str
-    target: str
-    relationship: str
-    weight: Optional[float] = 1.0
-
-
-class NetworkData(BaseModel):
-    nodes: List[Node]
-    edges: List[Edge]
 
 
 class Neo4jConnection:
@@ -74,16 +42,57 @@ class Neo4jConnection:
 neo4j_conn = Neo4jConnection()
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize connections on startup"""
+# Pydantic models
+class Node(BaseModel):
+    id: str
+    type: str
+    name: str
+    properties: Optional[Dict] = {}
+
+
+class Edge(BaseModel):
+    source: str
+    target: str
+    relationship: str
+    weight: Optional[float] = 1.0
+
+
+class NetworkData(BaseModel):
+    nodes: List[Node]
+    edges: List[Edge]
+
+
+class ShortestPathRequest(BaseModel):
+    network_data: NetworkData
+    source: str
+    target: str
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize connections
     neo4j_conn.connect()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Close connections on shutdown"""
+    yield
+    # Shutdown: Close connections
     neo4j_conn.close()
+
+
+app = FastAPI(
+    title="Supply Chain Network API",
+    description="API for supply chain network analytics using NetworkX and Neo4j",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS middleware for frontend access
+# NOTE: In production, replace ["*"] with specific allowed origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: Restrict to specific origins in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -161,7 +170,7 @@ async def analyze_network(network_data: NetworkData):
 
 
 @app.post("/network/shortest-path")
-async def shortest_path(network_data: NetworkData, source: str, target: str):
+async def shortest_path(request: ShortestPathRequest):
     """
     Find the shortest path between two nodes in the supply chain network
     """
@@ -169,20 +178,20 @@ async def shortest_path(network_data: NetworkData, source: str, target: str):
         # Create NetworkX graph
         G = nx.DiGraph()
         
-        for node in network_data.nodes:
+        for node in request.network_data.nodes:
             G.add_node(node.id, type=node.type, name=node.name)
         
-        for edge in network_data.edges:
+        for edge in request.network_data.edges:
             G.add_edge(edge.source, edge.target, weight=edge.weight)
         
         # Check if nodes exist
-        if source not in G or target not in G:
+        if request.source not in G or request.target not in G:
             raise HTTPException(status_code=404, detail="Source or target node not found")
         
         # Find shortest path
         try:
-            path = nx.shortest_path(G, source, target, weight='weight')
-            length = nx.shortest_path_length(G, source, target, weight='weight')
+            path = nx.shortest_path(G, request.source, request.target, weight='weight')
+            length = nx.shortest_path_length(G, request.source, request.target, weight='weight')
             
             return {
                 "status": "success",
