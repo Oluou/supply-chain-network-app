@@ -1,4 +1,82 @@
-from fastapi import FastAPI, HTTPException
+@app.get("/neo4j/consistency-check")
+async def neo4j_consistency_check():
+    """
+    Check if NetworkX graph and Neo4j database are in sync (node/edge counts).
+    """
+    try:
+        nodes_file = os.getenv("NODES_FILE", os.path.join(os.path.dirname(__file__), "usaspending_nodes.json"))
+        edges_file = os.getenv("EDGES_FILE", os.path.join(os.path.dirname(__file__), "usaspending_edges.json"))
+        G = analytics_engine.build_graph(nodes_path=nodes_file, edges_path=edges_file)
+        nx_nodes = G.number_of_nodes()
+        nx_edges = G.number_of_edges()
+        # Query Neo4j for counts
+        node_query = "MATCH (n) RETURN count(n) AS node_count"
+        edge_query = "MATCH ()-[r]->() RETURN count(r) AS edge_count"
+        neo4j_node_count = neo4j_conn.execute_query(node_query)[0]["node_count"]
+        neo4j_edge_count = neo4j_conn.execute_query(edge_query)[0]["edge_count"]
+        return {
+            "networkx": {"nodes": nx_nodes, "edges": nx_edges},
+            "neo4j": {"nodes": neo4j_node_count, "edges": neo4j_edge_count},
+            "in_sync": nx_nodes == neo4j_node_count and nx_edges == neo4j_edge_count
+        }
+    except Exception as e:
+        logger.error(f"Neo4j consistency check error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Neo4j consistency check error: {str(e)}")
+@app.post("/neo4j/refresh")
+async def neo4j_refresh():
+    """
+    Refresh Neo4j database from latest ingested NetworkX graph.
+    """
+    try:
+        nodes_file = os.getenv("NODES_FILE", os.path.join(os.path.dirname(__file__), "usaspending_nodes.json"))
+        edges_file = os.getenv("EDGES_FILE", os.path.join(os.path.dirname(__file__), "usaspending_edges.json"))
+        G = analytics_engine.build_graph(nodes_path=nodes_file, edges_path=edges_file)
+        # Import sync_to_neo4j and run sync
+        import sync_to_neo4j
+        sync_to_neo4j.sync_graph_to_neo4j(G)
+        logger.info("Neo4j database refreshed from NetworkX graph.")
+        return {"status": "success", "message": "Neo4j database refreshed from NetworkX graph."}
+    except Exception as e:
+        logger.error(f"Neo4j refresh error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Neo4j refresh error: {str(e)}")
+
+
+import os
+from dotenv import load_dotenv
+import httpx
+import logging
+# Load environment variables from .env if present
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger("supply_chain_backend")
+
+
+# Load environment variables from .env if present
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
+
+# Finnhub API settings
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "d5qjfahr01qhn30g3dvgd5qjfahr01qhn30g3e00")
+FINNHUB_SECRET = os.getenv("FINNHUB_SECRET", "d5qjfahr01qhn30g3e10")
+FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
+
+def get_finnhub_headers():
+    return {
+        "X-Finnhub-Secret": FINNHUB_SECRET,
+        "Accept": "application/json"
+    }
+
+async def finnhub_get(endpoint: str, params: dict = None):
+    url = f"{FINNHUB_BASE_URL}/{endpoint}"
+    headers = get_finnhub_headers()
+    params = params or {}
+    params["token"] = FINNHUB_API_KEY
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        return response.json()
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -6,6 +84,12 @@ from contextlib import asynccontextmanager
 import networkx as nx
 from neo4j import GraphDatabase
 import os
+
+# Import analytics engine
+import sys
+sys.path.append(os.path.dirname(__file__))
+import analytics_engine
+
 
 
 # Neo4j connection settings
@@ -106,16 +190,17 @@ async def root():
             "/network/analyze",
             "/network/shortest-path",
             "/network/centrality",
-            "/neo4j/nodes",
             "/neo4j/create-sample"
         ]
     }
+
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     neo4j_status = "connected" if neo4j_conn.driver else "disconnected"
+    logger.info(f"Health check requested. Neo4j status: {neo4j_status}")
     return {
         "status": "healthy",
         "neo4j": neo4j_status
@@ -296,6 +381,111 @@ async def create_sample_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Neo4j error: {str(e)}")
 
+
+
+# Finnhub Webhook Endpoint (must be after app is defined)
+import os
+from fastapi import Request
+
+# --- Advanced Analytics Endpoint ---
+
+@app.get("/analytics/metrics")
+async def get_advanced_analytics(
+    node_type: str = Query(None, description="Filter by node type"),
+    page: int = Query(1, ge=1, description="Page number for pagination"),
+    page_size: int = Query(50, ge=1, le=500, description="Page size for pagination")
+):
+    """
+    Compute and return advanced analytics (degree, eigenvector, authority centrality, risk scores)
+    using the ingested USAspending data. Automatically runs ingestion if files are missing.
+    """
+    import os
+    nodes_file = os.getenv("NODES_FILE", os.path.join(os.path.dirname(__file__), "usaspending_nodes.json"))
+    edges_file = os.getenv("EDGES_FILE", os.path.join(os.path.dirname(__file__), "usaspending_edges.json"))
+    # Check if files exist, run ingestion if missing
+    if not (os.path.exists(nodes_file) and os.path.exists(edges_file)):
+        try:
+            logger.info("Ingested data files missing. Running ingestion script...")
+            import subprocess
+            result = subprocess.run([
+                "python", os.path.join(os.path.dirname(__file__), "ingest_usaspending.py")
+            ], capture_output=True, text=True)
+            logger.info(f"Ingestion script output: {result.stdout}")
+            if result.returncode != 0:
+                logger.error(f"Ingestion failed: {result.stderr}")
+                raise Exception(f"Ingestion failed: {result.stderr}")
+        except Exception as e:
+            logger.error(f"Data ingestion error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Data ingestion error: {str(e)}")
+    try:
+        logger.info("Building graph from ingested data files...")
+        G = analytics_engine.build_graph(nodes_path=nodes_file, edges_path=edges_file)
+        logger.info(f"Graph loaded: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges.")
+        results = analytics_engine.compute_analytics(G)
+        logger.info("Analytics computed successfully.")
+        # Collect node analytics with all attributes
+        node_data = []
+        for node in G.nodes:
+            if node_type and G.nodes[node].get("type") != node_type:
+                continue
+            node_info = {
+                "id": node,
+                "type": G.nodes[node].get("type"),
+                "name": G.nodes[node].get("name"),
+                "degree_centrality": results["degree_centrality"].get(node, 0),
+                "eigenvector_centrality": results["eigenvector_centrality"].get(node, 0),
+                "authority": results["authority"].get(node, 0),
+                "hub": results["hub"].get(node, 0),
+                "risk_score": G.nodes[node].get("risk_score", 0),
+                "risk_forecast": G.nodes[node].get("risk_forecast", 0),
+                "macro": {
+                    "unemployment_rate": G.nodes[node].get("unemployment_rate"),
+                    "financial_health": G.nodes[node].get("financial_health"),
+                    "location_risk": G.nodes[node].get("location_risk"),
+                    "demand_score": G.nodes[node].get("demand_score"),
+                }
+            }
+            node_data.append(node_info)
+        # Pagination
+        total = len(node_data)
+        start = (page - 1) * page_size
+        end = start + page_size
+        paged_nodes = node_data[start:end]
+        # Summary stats
+        summary = {
+            "total_nodes": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size
+        }
+        return {
+            "status": "success",
+            "summary": summary,
+            "nodes": paged_nodes
+        }
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=f"Validation error: {str(ve)}")
+    except Exception as e:
+        logger.error(f"Analytics error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
+@app.post("/webhook/finnhub")
+async def finnhub_webhook(request: Request):
+    # Acknowledge receipt with 2xx before processing
+    # Check secret header
+    secret = request.headers.get("x-finnhub-secret")
+    if secret != FINNHUB_SECRET:
+        # Still return 2xx to avoid disabling endpoint, but log warning
+        print("Warning: Invalid Finnhub secret received.")
+        return {"status": "ignored", "reason": "invalid secret"}
+    # Parse event
+    try:
+        event = await request.json()
+    except Exception:
+        event = None
+    # Log event for now (replace with business logic as needed)
+    print("Received Finnhub event:", event)
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
