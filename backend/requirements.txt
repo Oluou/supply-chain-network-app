@@ -1,9 +1,11 @@
+# Testing and data source dependencies for CI
+pytest
+sec-edgar-downloader
 fastapi==0.109.1
 uvicorn[standard]==0.27.0
 neo4j==5.16.0
 networkx==3.2.1
 pydantic==2.5.3
 python-dotenv==1.0.0
-
 edgartools  # For SEC EDGAR filings and extractions
 usaspending-orm  # For USA Spending contract queries
