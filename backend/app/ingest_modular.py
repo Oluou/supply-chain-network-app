@@ -2,7 +2,8 @@
 Modular ingestion interface for supply chain network sources.
 Each source implements a class with ingest() method returning nodes/edges.
 """
-import json, decimal
+import json
+import decimal
 from typing import List, Dict, Tuple
 
 class IngestionSource:

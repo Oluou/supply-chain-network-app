@@ -1,20 +1,24 @@
-FROM python:3.11-slim
 
+# --- Multi-stage build for security and size ---
+FROM python:3.11-slim AS base
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# Install build dependencies, then remove them after install
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy requirements and install dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./app ./app
+
+# Remove build tools for smaller/safer image
+RUN apt-get purge -y gcc && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for running the app
+RUN useradd -m appuser
+USER appuser
 
 # Expose port
 EXPOSE 8000

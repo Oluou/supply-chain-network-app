@@ -5,7 +5,6 @@ then quantifies systemic risk per GWU thesis methodology.
 """
 import json
 import networkx as nx
-import numpy as np
 
 NODES_FILE = "usaspending_nodes.json"
 EDGES_FILE = "usaspending_edges.json"
