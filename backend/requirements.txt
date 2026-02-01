@@ -1,6 +1,6 @@
 # Testing and data source dependencies for CI
 pytest==8.0.0
-sec-edgar-downloader==5.2.0
+sec-edgar-downloader==5.0.3
 fastapi==0.109.1
 uvicorn[standard]==0.27.0
 neo4j==5.16.0
