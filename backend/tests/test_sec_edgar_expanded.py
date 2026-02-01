@@ -18,8 +18,8 @@ EMAIL = "your.email@example.com"
 
 # --- DOWNLOAD FILINGS ---
 dl = Downloader()
-dl.get(FORM_TYPE, COMPANY, limit=10)  # Download up to 10 most recent 10-Ks
-dl.get(FORM_TYPE, TICKER, limit=10)  # Also try ticker for robustness
+dl.get(FORM_TYPE, COMPANY, amount=10)  # Download up to 10 most recent 10-Ks
+dl.get(FORM_TYPE, TICKER, amount=10)  # Also try ticker for robustness
 
 # --- FIND FILINGS FOR YEAR ---
 search_dirs = [
