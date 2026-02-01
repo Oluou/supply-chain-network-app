@@ -17,7 +17,7 @@ EMAIL = "your.email@example.com"
 
 
 # --- DOWNLOAD FILINGS ---
-dl = Downloader(COMPANY_NAME, EMAIL)
+dl = Downloader()
 dl.get(FORM_TYPE, COMPANY, limit=10)  # Download up to 10 most recent 10-Ks
 dl.get(FORM_TYPE, TICKER, limit=10)  # Also try ticker for robustness
 
