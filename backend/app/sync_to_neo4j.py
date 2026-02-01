@@ -5,13 +5,21 @@ Loads nodes and edges from JSON and writes them to Neo4j for persistence and adv
 import json
 import networkx as nx
 from neo4j import GraphDatabase
+import os
 
 NODES_FILE = "usaspending_nodes.json"
 EDGES_FILE = "usaspending_edges.json"
 
-NEO4J_URI = "bolt://127.0.0.1:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "password"
+# Neo4j connection settings (require env vars, no defaults)
+NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_USER = os.getenv("NEO4J_USER")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+if not NEO4J_URI or NEO4J_URI.startswith("bolt://neo4j"):
+    raise RuntimeError("NEO4J_URI must be set as an environment variable and not use the default value.")
+if not NEO4J_USER or NEO4J_USER == "neo4j":
+    raise RuntimeError("NEO4J_USER must be set as an environment variable and not use the default value.")
+if not NEO4J_PASSWORD or NEO4J_PASSWORD == "password":
+    raise RuntimeError("NEO4J_PASSWORD must be set as an environment variable and not use the default value.")
 
 
 def build_graph(nodes_path=NODES_FILE, edges_path=EDGES_FILE):

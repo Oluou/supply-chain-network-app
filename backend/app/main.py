@@ -45,6 +45,15 @@ import os
 from dotenv import load_dotenv
 import httpx
 import logging
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict, Optional
+from contextlib import asynccontextmanager
+import networkx as nx
+from neo4j import GraphDatabase
+import analytics_engine
+
 # Load environment variables from .env if present
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
 
@@ -52,14 +61,14 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger("supply_chain_backend")
 
-
-# Load environment variables from .env if present
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
-
-# Finnhub API settings
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "d5qjfahr01qhn30g3dvgd5qjfahr01qhn30g3e00")
-FINNHUB_SECRET = os.getenv("FINNHUB_SECRET", "d5qjfahr01qhn30g3e10")
+# Finnhub API settings (require env vars, no defaults)
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
+FINNHUB_SECRET = os.getenv("FINNHUB_SECRET")
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
+if not FINNHUB_API_KEY or FINNHUB_API_KEY.startswith("d5qjfahr"):
+    raise RuntimeError("FINNHUB_API_KEY must be set as an environment variable and not use the default value.")
+if not FINNHUB_SECRET or FINNHUB_SECRET.startswith("d5qjfahr"):
+    raise RuntimeError("FINNHUB_SECRET must be set as an environment variable and not use the default value.")
 
 def get_finnhub_headers():
     return {
@@ -92,10 +101,16 @@ import analytics_engine
 
 
 
-# Neo4j connection settings
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+# Neo4j connection settings (require env vars, no defaults)
+NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_USER = os.getenv("NEO4J_USER")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+if not NEO4J_URI or NEO4J_URI.startswith("bolt://neo4j"):
+    raise RuntimeError("NEO4J_URI must be set as an environment variable and not use the default value.")
+if not NEO4J_USER or NEO4J_USER == "neo4j":
+    raise RuntimeError("NEO4J_USER must be set as an environment variable and not use the default value.")
+if not NEO4J_PASSWORD or NEO4J_PASSWORD == "password":
+    raise RuntimeError("NEO4J_PASSWORD must be set as an environment variable and not use the default value.")
 
 
 class Neo4jConnection:

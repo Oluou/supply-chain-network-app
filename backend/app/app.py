@@ -1,11 +1,24 @@
 
+
 import os
 import httpx
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.routers import ingestion, graph, neo4j, analytics, risk, nodes, edges
+from app.utils.monitoring import router as monitoring_router, track_metrics
+from app.utils.rate_limit import limiter
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import PlainTextResponse
+from app.utils.exceptions import add_global_exception_handlers
 
-# Finnhub API settings
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "d5qjfahr01qhn30g3dvgd5qjfahr01qhn30g3e00")
-FINNHUB_SECRET = os.getenv("FINNHUB_SECRET", "d5qjfahr01qhn30g3e10")
+# Finnhub API settings (require env vars, no defaults)
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
+FINNHUB_SECRET = os.getenv("FINNHUB_SECRET")
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
+if not FINNHUB_API_KEY or FINNHUB_API_KEY.startswith("d5qjfahr"):
+    raise RuntimeError("FINNHUB_API_KEY must be set as an environment variable and not use the default value.")
+if not FINNHUB_SECRET or FINNHUB_SECRET.startswith("d5qjfahr"):
+    raise RuntimeError("FINNHUB_SECRET must be set as an environment variable and not use the default value.")
 
 def get_finnhub_headers():
     return {
@@ -25,24 +38,6 @@ async def finnhub_get(endpoint: str, params: dict = None):
 
 
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-
-
-
-
-
-
-from app.routers import ingestion, graph, neo4j, analytics, risk, nodes, edges
-
-from app.utils.monitoring import router as monitoring_router, track_metrics
-from app.utils.rate_limit import limiter
-from slowapi.errors import RateLimitExceeded
-from fastapi.responses import PlainTextResponse
-from app.utils.exceptions import add_global_exception_handlers
-
-
 
 
 
@@ -60,7 +55,7 @@ add_global_exception_handlers(app)
 # CORS: Restrict to trusted origins in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Update for production
+    allow_origins=["http://localhost:3000"],  # TODO: Update to production frontend domain(s) only!
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -76,7 +71,13 @@ app.include_router(nodes.router)
 app.include_router(edges.router)
 app.include_router(monitoring_router)
 
-# Neo4j connection settings
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+# Neo4j connection settings (require env vars, no defaults)
+NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_USER = os.getenv("NEO4J_USER")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+if not NEO4J_URI or NEO4J_URI.startswith("bolt://neo4j"):
+    raise RuntimeError("NEO4J_URI must be set as an environment variable and not use the default value.")
+if not NEO4J_USER or NEO4J_USER == "neo4j":
+    raise RuntimeError("NEO4J_USER must be set as an environment variable and not use the default value.")
+if not NEO4J_PASSWORD or NEO4J_PASSWORD == "password":
+    raise RuntimeError("NEO4J_PASSWORD must be set as an environment variable and not use the default value.")

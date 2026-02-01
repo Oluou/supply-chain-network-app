@@ -1,11 +1,13 @@
 
+import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
-import os
 
-API_KEY = os.getenv("API_KEY", "changeme-supersecret-key")
+API_KEY = os.getenv("API_KEY")
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+if not API_KEY or API_KEY == "changeme-supersecret-key":
+    raise RuntimeError("API_KEY must be set as an environment variable and not use the default value.")
 
 def get_api_key(api_key: str = Depends(api_key_header)):
     # Support for key rotation: allow comma-separated keys

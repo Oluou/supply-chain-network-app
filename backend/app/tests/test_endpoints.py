@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 import sys
 import os
@@ -6,7 +5,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../'
 from app.app import app
 
 client = TestClient(app)
-API_KEY = os.getenv("API_KEY", "changeme-supersecret-key")
+API_KEY = os.getenv("API_KEY")
+if not API_KEY or API_KEY == "changeme-supersecret-key":
+    raise RuntimeError("API_KEY must be set as an environment variable and not use the default value.")
 
 # 1. Server & Health
 def test_server_docs():
